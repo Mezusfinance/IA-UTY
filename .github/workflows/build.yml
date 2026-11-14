@@ -10,7 +10,7 @@ jobs:
         run: |
           ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERRO: Nenhum ficheiro .zip encontrado no repositório."
+            echo "::error::Nenhum ficheiro .zip encontrado no repositório."
             exit 1
           fi
           unzip -o "$ZIP_FILE" -d extracted
@@ -27,15 +27,22 @@ jobs:
 
       - name: Configure SDK and Gradle
         run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          printf "sdk.dir=%s\napiKey=PLACEHOLDER\nGEMINI_API_KEY=PLACEHOLDER\n" "$ANDROID_HOME" > local.properties
           printf "\norg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8\nksp.useKSP2=false\nksp.incremental=false\norg.gradle.parallel=false\norg.gradle.workers.max=1\nkotlin.compiler.execution.strategy=out-of-process\n" >> gradle.properties
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
             gradle wrapper
           fi
           chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log || {
+            ERR_MSG=$(grep -E "^e: |FAILURE:|What went wrong:|Execution failed for task" build.log -A 3 | head -n 15 | tr '\n' ' ')
+            echo "::error::${ERR_MSG:-Falha na compilação do Gradle}"
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
