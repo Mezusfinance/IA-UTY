@@ -28,10 +28,17 @@ jobs:
       - name: Configure SDK and Gradle
         run: |
           printf "sdk.dir=%s\napiKey=PLACEHOLDER\nGEMINI_API_KEY=PLACEHOLDER\n" "$ANDROID_HOME" > local.properties
-          printf "\norg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8\nksp.useKSP2=false\nksp.incremental=false\norg.gradle.parallel=false\norg.gradle.workers.max=1\nkotlin.compiler.execution.strategy=out-of-process\n" >> gradle.properties
+          touch gradle.properties
+          sed -i '/ksp\.useKSP2/d; /org\.gradle\.configuration-cache/d; /org\.gradle\.parallel/d; /org\.gradle\.workers\.max/d; /kotlin\.compiler\.execution\.strategy/d' gradle.properties
+          printf "\norg.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8\norg.gradle.configuration-cache=false\norg.gradle.parallel=false\norg.gradle.workers.max=1\norg.gradle.caching=false\n" >> gradle.properties
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
-            gradle wrapper
+            GRADLE_VER=$(grep -oE 'gradle-[0-9]+\.[0-9]+(\.[0-9]+)?' gradle/wrapper/gradle-wrapper.properties 2>/dev/null | head -n 1 | sed 's/gradle-//')
+            if [ -n "$GRADLE_VER" ]; then
+              gradle wrapper --gradle-version "$GRADLE_VER"
+            else
+              gradle wrapper
+            fi
           fi
           chmod +x gradlew
 
