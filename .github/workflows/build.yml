@@ -5,25 +5,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Extract ZIP
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERRO: Nenhum ficheiro .zip encontrado no repositório."
+            exit 1
+          fi
           unzip -o "$ZIP_FILE" -d extracted
-          PROJ_DIR=$(find extracted -maxdepth 3 \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -printf "%h\n" | head -n 1)
+          PROJ_DIR=$(find extracted -maxdepth 4 \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -printf "%h\n" | head -n 1)
+          if [ -z "$PROJ_DIR" ]; then
+            PROJ_DIR=$(find extracted -maxdepth 4 \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf "%h\n" | head -n 1)
+          fi
           cp -a "$PROJ_DIR"/. .
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Build Debug APK
+
+      - name: Configure SDK and Gradle
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8" >> gradle.properties
+          if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            gradle wrapper
           fi
+          chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: "**/build/outputs/apk/debug/*.apk"
